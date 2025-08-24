@@ -1,0 +1,8 @@
+/*
+  Global styles can be placed here.
+
+  The responsive styles for the RadioGroup have been moved directly into
+  the App.js component using the `sx` prop. This is the recommended
+  approach when using Material-UI as it keeps styles co-located with
+  their components and avoids using `!important` overrides.
+*/
