@@ -1,0 +1,19 @@
+{
+    "name": "backend",
+    "version": "1.0.0",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "nodemon server.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "description": "",
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^5.1.0",
+        "googleapis": "^157.0.0",
+        "nodemon": "^3.1.10",
+        "puppeteer": "^24.17.0"
+    }
+}
