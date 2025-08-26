@@ -10,6 +10,8 @@
     "license": "ISC",
     "description": "",
     "dependencies": {
+        "chart.js": "^4.5.0",
+        "chartjs-node-canvas": "^5.0.0",
         "cors": "^2.8.5",
         "express": "^5.1.0",
         "googleapis": "^157.0.0",
