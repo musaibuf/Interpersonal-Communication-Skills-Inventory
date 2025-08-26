@@ -10,9 +10,8 @@ const PORT = process.env.PORT || 5001;
 // Middleware
 app.use(cors());
 
-// --- THIS IS THE CRITICAL FIX ---
+// --- THIS IS THE CRITICAL FIX FOR PDF GENERATION ---
 // Increase the limit for JSON request bodies to handle the large chart image data.
-// This must come BEFORE your app.post routes.
 app.use(express.json({ limit: '5mb' }));
 
 
