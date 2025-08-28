@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // We will configure this
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const { appendToSheet } = require('./googleSheets');
@@ -12,9 +12,17 @@ const PORT = process.env.PORT || 5001;
 // --- STYLING CONSTANTS ---
 const BRAND_COLOR = '#D9534F';
 const TEXT_COLOR = '#333333';
-const LIGHT_GRAY = '#EEEEEE'; // Made slightly darker for better line visibility
+const LIGHT_GRAY = '#EEEEEE';
 
-app.use(cors());
+// --- CORS CONFIGURATION FIX ---
+// This tells your backend to ONLY accept requests from your frontend's URL.
+const corsOptions = {
+  origin: 'https://interpersonal-communication-skills.onrender.com',
+  optionsSuccessStatus: 200 // For legacy browser support
+};
+app.use(cors(corsOptions));
+// --- END OF FIX ---
+
 app.use(express.json({ limit: '5mb' }));
 
 app.post('/api/save', async (req, res) => {
@@ -119,7 +127,7 @@ app.post('/api/generate-pdf', async (req, res) => {
     // --- PAGES 3 & 4: DETAILED SCORE BREAKDOWN (REFACTORED) ---
     const tableTopMargin = 50;
     const tableBottomMargin = 50;
-    const rowHeight = 40; // Height of each table row
+    const rowHeight = 40;
 
     const generateTableHeader = () => {
         doc.font('Helvetica-Bold').fontSize(10);
@@ -133,7 +141,6 @@ app.post('/api/generate-pdf', async (req, res) => {
     };
 
     const generateTableRow = (num, question, response, score) => {
-        // Check if there's enough space for the next row, otherwise add a new page
         if (doc.y + rowHeight > doc.page.height - tableBottomMargin) {
             doc.addPage();
             generateTableHeader();
@@ -161,7 +168,6 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.moveDown(2);
 
     sectionsContent.forEach((section, secIndex) => {
-        // Add a page break between sections II and III
         if (secIndex === 2) {
             doc.addPage();
             doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Detailed Score Breakdown (Cont.)', { align: 'center' });
