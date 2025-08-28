@@ -40,7 +40,8 @@ app.post('/api/generate-pdf', async (req, res) => {
     console.log('Generating the multi-page PDF...');
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: puppeteer.executablePath(), // <-- THIS IS THE FIX
     });
     const page = await browser.newPage();
     
