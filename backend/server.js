@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors'); // We will configure this
+const cors = require('cors');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const { appendToSheet } = require('./googleSheets');
@@ -14,14 +14,23 @@ const BRAND_COLOR = '#D9534F';
 const TEXT_COLOR = '#333333';
 const LIGHT_GRAY = '#EEEEEE';
 
-// --- CORS CONFIGURATION FIX ---
-// This tells your backend to ONLY accept requests from your frontend's URL.
+// --- DYNAMIC CORS CONFIGURATION FOR DEVELOPMENT AND PRODUCTION ---
+const whitelist = ['https://interpersonal-communication-skills.onrender.com'];
+if (process.env.NODE_ENV !== 'production') {
+  whitelist.push('http://localhost:3000');
+}
 const corsOptions = {
-  origin: 'https://interpersonal-communication-skills.onrender.com',
-  optionsSuccessStatus: 200 // For legacy browser support
+  origin: function (origin, callback) {
+    if (!origin || whitelist.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-// --- END OF FIX ---
+// --- END OF CORS CONFIG ---
 
 app.use(express.json({ limit: '5mb' }));
 
@@ -78,7 +87,12 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.font('Helvetica-Bold').text('Date:', 70, detailsY + 40);
     doc.font('Helvetica').text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), 150, detailsY + 40);
 
-    doc.image(chartImage, { fit: [400, 300], align: 'center', y: 350 });
+    // --- FIX: Manually center the chart image ---
+    const chartWidth = 400;
+    const chartX = (doc.page.width - chartWidth) / 2;
+    doc.image(chartImage, chartX, 350, { fit: [chartWidth, 300] });
+    // --- END OF FIX ---
+
     doc.fontSize(10).fillColor(TEXT_COLOR).text('The chart above provides a visual snapshot of your communication profile. The further a point is from the center, the higher your score in that specific area.', 70, 680, { align: 'center' });
 
     // --- PAGE 2: RESULTS SUMMARY ---
@@ -125,7 +139,6 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.fontSize(48).text(`${data.scores.total} / 120`, { align: 'center' });
 
     // --- PAGES 3 & 4: DETAILED SCORE BREAKDOWN (REFACTORED) ---
-    const tableTopMargin = 50;
     const tableBottomMargin = 50;
     const rowHeight = 40;
 
@@ -168,11 +181,14 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.moveDown(2);
 
     sectionsContent.forEach((section, secIndex) => {
-        if (secIndex === 2) {
+        // --- FIX: Check for space BEFORE drawing the section header ---
+        const spaceForHeader = 60; // Estimated space needed for header + one row
+        if (doc.y + spaceForHeader > doc.page.height - tableBottomMargin) {
             doc.addPage();
             doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Detailed Score Breakdown (Cont.)', { align: 'center' });
             doc.moveDown(2);
         }
+        // --- END OF FIX ---
 
         doc.fontSize(16).fillColor(TEXT_COLOR).font('Helvetica-Bold').text(section.title);
         doc.moveDown(1);
