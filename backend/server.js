@@ -4,13 +4,13 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const { appendToSheet } = require('./googleSheets');
 const { generateChartImage } = require('./generateChart');
-const { questions } = require('./questions'); // Import the questions
+const { questions } = require('./questions'); // Import the new questions data structure
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
 // --- STYLING CONSTANTS ---
-const BRAND_COLOR = '#D9534F'; // A close match to the red/orange in the design
+const BRAND_COLOR = '#D9534F';
 const TEXT_COLOR = '#333333';
 const LIGHT_GRAY = '#F5F5F5';
 
@@ -23,6 +23,8 @@ app.post('/api/save', async (req, res) => {
     if (!data || !data.name || !data.scores) {
       return res.status(400).json({ error: 'Invalid data for saving.' });
     }
+    // The appendToSheet function needs to be compatible with the data structure
+    // We will pass the full data object to it. Ensure it's handled correctly there.
     await appendToSheet(data);
     console.log('Data saved to Google Sheets successfully.');
     res.status(200).json({ message: 'Data saved successfully.' });
@@ -35,7 +37,7 @@ app.post('/api/save', async (req, res) => {
 app.post('/api/generate-pdf', async (req, res) => {
   try {
     const data = req.body;
-    if (!data || !data.name || !data.scores) {
+    if (!data || !data.name || !data.scores || !data.responses) {
       return res.status(400).json({ error: 'Invalid data for PDF generation.' });
     }
 
@@ -48,11 +50,9 @@ app.post('/api/generate-pdf', async (req, res) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
     doc.pipe(res);
 
-    // Register Helvetica font if needed (PDFKit has it built-in)
     doc.font('Helvetica');
 
     // --- PAGE 1: TITLE AND CHART ---
-    // Logo
     if (fs.existsSync('./logo.png')) {
         doc.image('./logo.png', 275, 40, { width: 50 });
     }
@@ -80,7 +80,6 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Results Summary', { align: 'center' });
     doc.moveDown(2);
 
-    // Key Insights Box
     const sections = [
         { name: 'Sending Clear Messages', score: data.scores.section1 },
         { name: 'Listening', score: data.scores.section2 },
@@ -95,10 +94,8 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.fillColor(TEXT_COLOR).font('Helvetica-Bold').text('Key Insights', 90, doc.y + 10);
     doc.font('Helvetica').fontSize(10).text(`Area of Strength: ${areaOfStrength}`, 90, doc.y + 15);
     doc.text(`Area for Improvement: ${areaForImprovement}`, 90, doc.y + 5);
-    doc.y += 30; // Move cursor down past the box
+    doc.y += 30;
 
-    // Section Scores
-    const sectionYStart = doc.y;
     const sectionTexts = [
         { title: 'Section I: Sending Clear Messages', score: data.scores.section1 },
         { title: 'Section II: Listening', score: data.scores.section2 },
@@ -106,6 +103,7 @@ app.post('/api/generate-pdf', async (req, res) => {
         { title: 'Section IV: Handling Emotional Interactions', score: data.scores.section4 },
     ];
 
+    const sectionYStart = doc.y;
     sectionTexts.forEach((sec, index) => {
         const y = sectionYStart + index * 60;
         doc.rect(70, y, 460, 50).fill(LIGHT_GRAY);
@@ -114,18 +112,18 @@ app.post('/api/generate-pdf', async (req, res) => {
         doc.fillColor(TEXT_COLOR).font('Helvetica').fontSize(11).text(`Score: ${sec.score} / 30 - Needs improvement`, 90, y + 30);
     });
     
-    doc.y = sectionYStart + 4 * 65; // Position cursor after the blocks
+    doc.y = sectionYStart + 4 * 65;
 
-    // Total Score Box
     doc.rect(70, doc.y, 460, 100).fill(BRAND_COLOR);
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(14).text('TOTAL SCORE', { align: 'center' }, doc.y + 20);
     doc.fontSize(48).text(`${data.scores.total} / 120`, { align: 'center' });
 
     // --- PAGES 3 & 4: DETAILED SCORE BREAKDOWN ---
     const generateTableRow = (y, num, question, response, score) => {
+        const responseText = response ? response.charAt(0).toUpperCase() + response.slice(1) : 'N/A';
         doc.fontSize(9).font('Helvetica-Bold').text(num, 75, y);
         doc.font('Helvetica').text(question, 110, y, { width: 280 });
-        doc.text(response, 400, y, { width: 80, align: 'center' });
+        doc.text(responseText, 400, y, { width: 80, align: 'center' });
         doc.text(score, 480, y, { width: 50, align: 'center' });
         doc.moveTo(70, y + 35).lineTo(530, y + 35).strokeColor(LIGHT_GRAY).stroke();
     };
@@ -140,35 +138,35 @@ app.post('/api/generate-pdf', async (req, res) => {
     };
 
     const sectionsContent = [
-        { title: 'Section I: Sending Clear Messages', start: 0, end: 10 },
-        { title: 'Section II: Listening', start: 10, end: 20 },
-        { title: 'Section III: Giving and Getting Feedback', start: 20, end: 30 },
-        { title: 'Section IV: Handling Emotional Interactions', start: 30, end: 40 },
+        { title: 'Section I: Sending Clear Messages', start: 1, end: 10 },
+        { title: 'Section II: Listening', start: 11, end: 20 },
+        { title: 'Section III: Giving and Getting Feedback', start: 21, end: 30 },
+        { title: 'Section IV: Handling Emotional Interactions', start: 31, end: 40 },
     ];
 
     let currentPage = 3;
-    let currentY = 0;
-
     sectionsContent.forEach((section, secIndex) => {
-        if (secIndex === 0 || secIndex === 2) { // Start a new page for sections 1 and 3
+        if (secIndex === 0 || secIndex === 2) {
             doc.addPage();
             let pageTitle = 'Detailed Score Breakdown';
             if (currentPage > 3) pageTitle += ' (Cont.)';
             doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text(pageTitle, { align: 'center' });
             doc.moveDown(2);
-            currentY = doc.y;
             currentPage++;
         }
 
         doc.fontSize(16).fillColor(TEXT_COLOR).font('Helvetica-Bold').text(section.title);
         doc.moveDown(1);
-        currentY = doc.y;
+        let currentY = doc.y;
         generateTableHeader(currentY);
         currentY += 35;
 
-        for (let i = section.start; i < section.end; i++) {
-            const response = data.responses[i];
-            generateTableRow(currentY, i + 1, questions[i], response.response, response.score);
+        for (let i = section.start; i <= section.end; i++) {
+            const questionData = questions[i - 1];
+            const userResponseText = data.responses[i];
+            const score = questionData && userResponseText ? questionData.scoring[userResponseText] : 0;
+            
+            generateTableRow(currentY, i, questionData.text, userResponseText, score);
             currentY += 45;
         }
         doc.y = currentY;
@@ -196,13 +194,15 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.moveDown(3);
     doc.text('Thank you for taking the assessment.', { align: 'center' });
 
-    // Finalize the PDF and end the stream
     console.log('New PDF Generated Successfully.');
     doc.end();
 
   } catch (error) {
     console.error('FATAL ERROR generating PDF:', error);
-    res.status(500).json({ error: 'An internal server error occurred while generating the PDF.' });
+    // Ensure we don't try to write to the stream if it's already closed or errored
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'An internal server error occurred while generating the PDF.' });
+    }
   }
 });
 
