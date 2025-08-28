@@ -4,7 +4,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const { appendToSheet } = require('./googleSheets');
 const { generateChartImage } = require('./generateChart');
-const { questions } = require('./questions'); // Import the new questions data structure
+const { questions } = require('./questions');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5001;
 // --- STYLING CONSTANTS ---
 const BRAND_COLOR = '#D9534F';
 const TEXT_COLOR = '#333333';
-const LIGHT_GRAY = '#F5F5F5';
+const LIGHT_GRAY = '#EEEEEE'; // Made slightly darker for better line visibility
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -23,8 +23,6 @@ app.post('/api/save', async (req, res) => {
     if (!data || !data.name || !data.scores) {
       return res.status(400).json({ error: 'Invalid data for saving.' });
     }
-    // The appendToSheet function needs to be compatible with the data structure
-    // We will pass the full data object to it. Ensure it's handled correctly there.
     await appendToSheet(data);
     console.log('Data saved to Google Sheets successfully.');
     res.status(200).json({ message: 'Data saved successfully.' });
@@ -118,23 +116,37 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(14).text('TOTAL SCORE', { align: 'center' }, doc.y + 20);
     doc.fontSize(48).text(`${data.scores.total} / 120`, { align: 'center' });
 
-    // --- PAGES 3 & 4: DETAILED SCORE BREAKDOWN ---
-    const generateTableRow = (y, num, question, response, score) => {
-        const responseText = response ? response.charAt(0).toUpperCase() + response.slice(1) : 'N/A';
-        doc.fontSize(9).font('Helvetica-Bold').text(num, 75, y);
-        doc.font('Helvetica').text(question, 110, y, { width: 280 });
-        doc.text(responseText, 400, y, { width: 80, align: 'center' });
-        doc.text(score, 480, y, { width: 50, align: 'center' });
-        doc.moveTo(70, y + 35).lineTo(530, y + 35).strokeColor(LIGHT_GRAY).stroke();
-    };
-    
-    const generateTableHeader = (y) => {
+    // --- PAGES 3 & 4: DETAILED SCORE BREAKDOWN (REFACTORED) ---
+    const tableTopMargin = 50;
+    const tableBottomMargin = 50;
+    const rowHeight = 40; // Height of each table row
+
+    const generateTableHeader = () => {
         doc.font('Helvetica-Bold').fontSize(10);
+        const y = doc.y;
         doc.text('#', 75, y);
         doc.text('Question', 110, y);
         doc.text('Your Response', 400, y, { width: 80, align: 'center' });
         doc.text('Score', 480, y, { width: 50, align: 'center' });
         doc.moveTo(70, y + 20).lineTo(530, y + 20).strokeColor(TEXT_COLOR).stroke();
+        doc.y += 25;
+    };
+
+    const generateTableRow = (num, question, response, score) => {
+        // Check if there's enough space for the next row, otherwise add a new page
+        if (doc.y + rowHeight > doc.page.height - tableBottomMargin) {
+            doc.addPage();
+            generateTableHeader();
+        }
+        
+        const y = doc.y;
+        const responseText = response ? response.charAt(0).toUpperCase() + response.slice(1) : 'N/A';
+        doc.fontSize(9).font('Helvetica-Bold').text(num, 75, y, { height: rowHeight, lineBreak: false });
+        doc.font('Helvetica').text(question, 110, y, { width: 280, height: rowHeight });
+        doc.text(responseText, 400, y, { width: 80, align: 'center', height: rowHeight });
+        doc.text(score, 480, y, { width: 50, align: 'center', height: rowHeight });
+        doc.moveTo(70, y + rowHeight - 5).lineTo(530, y + rowHeight - 5).strokeColor(LIGHT_GRAY).stroke();
+        doc.y += rowHeight;
     };
 
     const sectionsContent = [
@@ -144,33 +156,29 @@ app.post('/api/generate-pdf', async (req, res) => {
         { title: 'Section IV: Handling Emotional Interactions', start: 31, end: 40 },
     ];
 
-    let currentPage = 3;
+    doc.addPage();
+    doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Detailed Score Breakdown', { align: 'center' });
+    doc.moveDown(2);
+
     sectionsContent.forEach((section, secIndex) => {
-        if (secIndex === 0 || secIndex === 2) {
+        // Add a page break between sections II and III
+        if (secIndex === 2) {
             doc.addPage();
-            let pageTitle = 'Detailed Score Breakdown';
-            if (currentPage > 3) pageTitle += ' (Cont.)';
-            doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text(pageTitle, { align: 'center' });
+            doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Detailed Score Breakdown (Cont.)', { align: 'center' });
             doc.moveDown(2);
-            currentPage++;
         }
 
         doc.fontSize(16).fillColor(TEXT_COLOR).font('Helvetica-Bold').text(section.title);
         doc.moveDown(1);
-        let currentY = doc.y;
-        generateTableHeader(currentY);
-        currentY += 35;
+        generateTableHeader();
 
         for (let i = section.start; i <= section.end; i++) {
             const questionData = questions[i - 1];
             const userResponseText = data.responses[i];
             const score = questionData && userResponseText ? questionData.scoring[userResponseText] : 0;
-            
-            generateTableRow(currentY, i, questionData.text, userResponseText, score);
-            currentY += 45;
+            generateTableRow(i, questionData.text, userResponseText, score);
         }
-        doc.y = currentY;
-        doc.moveDown(2);
+        doc.moveDown(3);
     });
 
     // --- PAGE 5: NEXT STEPS ---
@@ -199,7 +207,6 @@ app.post('/api/generate-pdf', async (req, res) => {
 
   } catch (error) {
     console.error('FATAL ERROR generating PDF:', error);
-    // Ensure we don't try to write to the stream if it's already closed or errored
     if (!res.headersSent) {
       res.status(500).json({ error: 'An internal server error occurred while generating the PDF.' });
     }
