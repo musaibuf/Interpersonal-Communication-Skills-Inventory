@@ -9,12 +9,15 @@ const { questions } = require('./questions');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// --- STYLING CONSTANTS ---
+// --- STYLING & DATA CONSTANTS ---
 const BRAND_COLOR = '#D9534F';
 const TEXT_COLOR = '#333333';
-const LIGHT_GRAY = '#EEEEEE';
+const LIGHT_GRAY = '#F5F5F5';
+const STRENGTH_COLOR = '#28A745';
+const ATTENTION_COLOR = '#FFC107';
+const IMPROVEMENT_COLOR = BRAND_COLOR;
 
-// --- DYNAMIC CORS CONFIGURATION FOR DEVELOPMENT AND PRODUCTION ---
+// --- DYNAMIC CORS CONFIGURATION ---
 const whitelist = ['https://interpersonal-communication-skills.onrender.com'];
 if (process.env.NODE_ENV !== 'production') {
   whitelist.push('http://localhost:3000');
@@ -30,7 +33,6 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-// --- END OF CORS CONFIG ---
 
 app.use(express.json({ limit: '5mb' }));
 
@@ -87,11 +89,9 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.font('Helvetica-Bold').text('Date:', 70, detailsY + 40);
     doc.font('Helvetica').text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), 150, detailsY + 40);
 
-    // --- FIX: Manually center the chart image ---
     const chartWidth = 400;
     const chartX = (doc.page.width - chartWidth) / 2;
     doc.image(chartImage, chartX, 350, { fit: [chartWidth, 300] });
-    // --- END OF FIX ---
 
     doc.fontSize(10).fillColor(TEXT_COLOR).text('The chart above provides a visual snapshot of your communication profile. The further a point is from the center, the higher your score in that specific area.', 70, 680, { align: 'center' });
 
@@ -106,15 +106,33 @@ app.post('/api/generate-pdf', async (req, res) => {
         { name: 'Giving and Getting Feedback', score: data.scores.section3 },
         { name: 'Handling Emotional Interactions', score: data.scores.section4 },
     ];
-    const sortedScores = [...sections].sort((a, b) => a.score - b.score);
-    const areaForImprovement = sortedScores[0].name;
-    const areaOfStrength = sortedScores[3].name;
+    
+    const maxScore = Math.max(...sections.map(s => s.score));
+    const minScore = Math.min(...sections.map(s => s.score));
 
-    doc.rect(70, doc.y, 460, 80).fill(LIGHT_GRAY);
-    doc.fillColor(TEXT_COLOR).font('Helvetica-Bold').text('Key Insights', 90, doc.y + 10);
-    doc.font('Helvetica').fontSize(10).text(`Area of Strength: ${areaOfStrength}`, 90, doc.y + 15);
-    doc.text(`Area for Improvement: ${areaForImprovement}`, 90, doc.y + 5);
-    doc.y += 30;
+    const highestAreas = sections.filter(s => s.score === maxScore).map(s => s.name);
+    const lowestAreas = sections.filter(s => s.score === minScore).map(s => s.name);
+
+    const highestLabel = highestAreas.length > 1 ? 'Your highest scores are in:' : 'Your highest score is in:';
+    const lowestLabel = lowestAreas.length > 1 ? 'Your areas with the lowest score are:' : 'Your area with the lowest score is:';
+
+    const insightsBoxY = doc.y;
+    const insightsBoxHeight = 90;
+    doc.rect(70, insightsBoxY, 460, insightsBoxHeight).fill(LIGHT_GRAY);
+    doc.fillColor(TEXT_COLOR).font('Helvetica-Bold').text('Key Insights', 90, insightsBoxY + 5);
+    doc.font('Helvetica').fontSize(10).text(`${highestLabel} ${highestAreas.join(', ')}`, 90, insightsBoxY + 35, { width: 420 });
+    
+    // --- FIX: Increased the Y coordinate to add more space between the lines ---
+    doc.text(`${lowestLabel} ${lowestAreas.join(', ')}`, 90, insightsBoxY + 55, { width: 420 });
+    // --- END OF FIX ---
+
+    doc.y = insightsBoxY + insightsBoxHeight + 15;
+
+    const getScoreInterpretation = (score) => {
+        if (score <= 15) return { text: 'Needs improvement', color: IMPROVEMENT_COLOR };
+        if (score <= 21) return { text: 'Needs more consistent attention', color: ATTENTION_COLOR };
+        return { text: 'Area of strength or potential strength', color: STRENGTH_COLOR };
+    };
 
     const sectionTexts = [
         { title: 'Section I: Sending Clear Messages', score: data.scores.section1 },
@@ -126,10 +144,12 @@ app.post('/api/generate-pdf', async (req, res) => {
     const sectionYStart = doc.y;
     sectionTexts.forEach((sec, index) => {
         const y = sectionYStart + index * 60;
+        const interpretation = getScoreInterpretation(sec.score);
         doc.rect(70, y, 460, 50).fill(LIGHT_GRAY);
         doc.rect(70, y, 10, 50).fill(BRAND_COLOR);
         doc.fillColor(BRAND_COLOR).font('Helvetica-Bold').fontSize(14).text(sec.title, 90, y + 10);
-        doc.fillColor(TEXT_COLOR).font('Helvetica').fontSize(11).text(`Score: ${sec.score} / 30 - Needs improvement`, 90, y + 30);
+        doc.fillColor(TEXT_COLOR).font('Helvetica').fontSize(11).text(`Score: ${sec.score} / 30 - `)
+           .font('Helvetica-Bold').fillColor(interpretation.color).text(interpretation.text, { continued: false });
     });
     
     doc.y = sectionYStart + 4 * 65;
@@ -138,7 +158,31 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(14).text('TOTAL SCORE', { align: 'center' }, doc.y + 20);
     doc.fontSize(48).text(`${data.scores.total} / 120`, { align: 'center' });
 
-    // --- PAGES 3 & 4: DETAILED SCORE BREAKDOWN (REFACTORED) ---
+    // --- PAGE 3: UNDERSTANDING YOUR SCORES ---
+    doc.addPage();
+    doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Understanding Your Scores', { align: 'center' });
+    doc.moveDown(2);
+    doc.fontSize(11).fillColor(TEXT_COLOR).font('Helvetica').text('Higher overall scores reflect stronger interpersonal communication skills. The breakdown below explains what the score for each section means. Focus on low-scoring sections for development.', { align: 'left' });
+    doc.moveDown(3);
+
+    const interpretations = [
+        { range: '22-30', title: 'Area of Strength', color: STRENGTH_COLOR, description: 'Indicates areas of strength or potential strength. You are likely confident and effective in these aspects of communication.' },
+        { range: '16-21', title: 'Needs More Consistent Attention', color: ATTENTION_COLOR, description: 'Indicates areas that are generally okay but could be more consistent. Focusing here can turn a moderate skill into a strong one.' },
+        { range: '1-15', title: 'Needs Improvement', color: IMPROVEMENT_COLOR, description: 'Indicates areas of communication that would benefit most from focused development and practice.' }
+    ];
+
+    const pageMargin = 50;
+    interpretations.forEach(item => {
+        const boxY = doc.y;
+        doc.rect(pageMargin, boxY, doc.page.width - (pageMargin * 2), 70).fill(LIGHT_GRAY);
+        doc.rect(pageMargin, boxY, 10, 70).fill(item.color);
+        doc.fillColor(item.color).font('Helvetica-Bold').fontSize(14).text(item.title, pageMargin + 20, boxY + 15);
+        doc.fillColor(TEXT_COLOR).font('Helvetica').fontSize(10).text(`(Scores in the ${item.range} range)`, pageMargin + 20, boxY + 35, { continued: true }).text(` ${item.description}`);
+        doc.y = boxY + 70;
+        doc.moveDown(3);
+    });
+
+    // --- PAGES 4 & 5: DETAILED SCORE BREAKDOWN ---
     const tableBottomMargin = 50;
     const rowHeight = 40;
 
@@ -181,14 +225,12 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.moveDown(2);
 
     sectionsContent.forEach((section, secIndex) => {
-        // --- FIX: Check for space BEFORE drawing the section header ---
-        const spaceForHeader = 60; // Estimated space needed for header + one row
+        const spaceForHeader = 60;
         if (doc.y + spaceForHeader > doc.page.height - tableBottomMargin) {
             doc.addPage();
             doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Detailed Score Breakdown (Cont.)', { align: 'center' });
             doc.moveDown(2);
         }
-        // --- END OF FIX ---
 
         doc.fontSize(16).fillColor(TEXT_COLOR).font('Helvetica-Bold').text(section.title);
         doc.moveDown(1);
@@ -203,26 +245,35 @@ app.post('/api/generate-pdf', async (req, res) => {
         doc.moveDown(3);
     });
 
-    // --- PAGE 5: NEXT STEPS ---
+    // --- FINAL PAGE: Understanding Your Profile & Next Steps ---
     doc.addPage();
     doc.fontSize(22).fillColor(BRAND_COLOR).font('Helvetica-Bold').text('Understanding Your Profile & Next Steps', { align: 'center' });
     doc.moveDown(2);
     doc.fontSize(11).fillColor(TEXT_COLOR).font('Helvetica').text('This report provides a snapshot of your communication skills based on your responses. Use these insights as a guide for personal and professional development.', { align: 'left' });
-    doc.moveDown(2);
-
-    doc.fontSize(14).font('Helvetica-Bold').text('Suggestions for Improvement:');
-    doc.moveDown(1);
-    doc.fontSize(11).font('Helvetica').list([
-        'For Sending Clear Messages: Practice being concise. Before speaking, ask yourself, "What is the single most important point I want to make?" Pause to allow others to process your message.',
-        'For Listening: Focus on active listening. Instead of planning your reply while someone is talking, concentrate on their words. Paraphrase what you heard ("So, what you\'re saying is...") to confirm your understanding before you respond.',
-        'For Giving & Getting Feedback: When giving feedback, use the "Situation-Behavior-Impact" model. When receiving feedback, listen without immediately defending yourself. Thank the person and take time to reflect on their perspective.',
-        'For Handling Emotional Interactions: Acknowledge the other person\'s emotions ("I can see this is frustrating for you"). If you feel yourself getting angry, it\'s okay to say, "I need a moment to think about this." This allows for a more rational and productive conversation.'
-    ], { bulletRadius: 2, textIndent: 10, indent: 20 });
-    doc.moveDown(2);
-
-    doc.text('Continuous self-awareness and practice are the keys to becoming a more effective communicator. We hope this report serves as a valuable step in your journey.');
     doc.moveDown(3);
-    doc.text('Thank you for taking the assessment.', { align: 'center' });
+
+    const suggestions = [
+        { title: 'For Sending Clear Messages', text: 'Practice being concise. Before speaking, ask yourself, "What is the single most important point I want to make?" Pause to allow others to process your message.' },
+        { title: 'For Listening', text: 'Focus on active listening. Instead of planning your reply while someone is talking, concentrate on their words. Paraphrase what you heard ("So, what you\'re saying is...") to confirm your understanding before you respond.' },
+        { title: 'For Giving & Getting Feedback', text: 'When giving feedback, use the "Situation-Behavior-Impact" model. When receiving feedback, listen without immediately defending yourself. Thank the person and take time to reflect on their perspective.' },
+        { title: 'For Handling Emotional Interactions', text: 'Acknowledge the other person\'s emotions ("I can see this is frustrating for you"). If you feel yourself getting angry, it\'s okay to say, "I need a moment to think about this." This allows for a more rational and productive conversation.' }
+    ];
+
+    suggestions.forEach(item => {
+        const boxY = doc.y;
+        const boxHeight = 75;
+        doc.rect(pageMargin, boxY, doc.page.width - (pageMargin * 2), boxHeight).fill(LIGHT_GRAY);
+        doc.rect(pageMargin, boxY, 10, boxHeight).fill(BRAND_COLOR);
+        doc.fillColor(BRAND_COLOR).font('Helvetica-Bold').fontSize(14).text(item.title, pageMargin + 20, boxY + 15);
+        doc.fillColor(TEXT_COLOR).font('Helvetica').fontSize(10).text(item.text, pageMargin + 20, boxY + 35, { width: doc.page.width - (pageMargin * 2) - 30 });
+        doc.y = boxY + boxHeight;
+        doc.moveDown(2);
+    });
+
+    doc.font('Helvetica').text('Continuous self-awareness and practice are the keys to becoming a more effective communicator. We hope this report serves as a valuable step in your journey.');
+    doc.moveDown(3);
+
+    doc.fontSize(10).font('Helvetica-Oblique').text('For further clarification regarding your results or guidance on next steps, please consult your trainer or reach out to Musaib at musaib@carnelianco.com', { align: 'center' });
 
     console.log('New PDF Generated Successfully.');
     doc.end();
