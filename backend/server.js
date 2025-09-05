@@ -273,7 +273,7 @@ app.post('/api/generate-pdf', async (req, res) => {
     doc.font('Helvetica').text('Continuous self-awareness and practice are the keys to becoming a more effective communicator. We hope this report serves as a valuable step in your journey.');
     doc.moveDown(3);
 
-    doc.fontSize(10).font('Helvetica-Oblique').text('For further clarification regarding your results or guidance on next steps, please consult your trainer or reach out at musaib@carnelianco.com', { align: 'center' });
+    doc.fontSize(10).font('Helvetica-Oblique').text('For further clarification regarding your results or guidance on next steps, please consult your trainer or reach out to us at hello@carnelianco.com', { align: 'center' });
 
     console.log('New PDF Generated Successfully.');
     doc.end();
