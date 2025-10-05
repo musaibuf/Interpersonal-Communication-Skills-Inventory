@@ -104,7 +104,7 @@ const containerStyles = {
 // --- DATA (Questions, Scoring) --- (No changes here)
 const sections = [
   {
-    title: 'Section I',
+    title: 'Section I: Sending Clear Messages',
     questions: [
       { id: 1, text: 'Is it difficult for you to talk to other people?', scoring: { usually: 0, sometimes: 1, seldom: 3 } },
       { id: 2, text: 'When you are trying to explain something, do others tend to put words in your mouth, or finish your sentences for you?', scoring: { usually: 0, sometimes: 1, seldom: 3 } },
@@ -119,7 +119,7 @@ const sections = [
     ],
   },
   {
-    title: 'Section II',
+    title: 'Section II: Listening',
     questions: [
       { id: 11, text: 'In conversation, do you tend to do more talking than the other person does?', scoring: { usually: 0, sometimes: 1, seldom: 3 } },
       { id: 12, text: 'In conversation, do you ask the other person questions when you don’t understand what they’ve said?', scoring: { usually: 3, sometimes: 1, seldom: 0 } },
@@ -134,7 +134,7 @@ const sections = [
     ],
   },
   {
-    title: 'Section III',
+    title: 'Section III: Giving and Getting Feedback',
     questions: [
       { id: 21, text: 'Is it difficult to hear or accept criticism from the other person?', scoring: { usually: 0, sometimes: 1, seldom: 3 } },
       { id: 22, text: 'Do you refrain from saying something that you think will upset someone or make matters worse?', scoring: { usually: 3, sometimes: 1, seldom: 0 } },
@@ -149,7 +149,7 @@ const sections = [
     ],
   },
   {
-    title: 'Section IV',
+    title: 'Section IV: Handling Emotional Interactions',
     questions: [
       { id: 31, text: 'Do you have a tendency to change the subject when the other person’s feelings enter into the discussion?', scoring: { usually: 0, sometimes: 1, seldom: 3 } },
       { id: 32, text: 'Does it upset you a great deal when someone disagrees with you?', scoring: { usually: 0, sometimes: 1, seldom: 3 } },
